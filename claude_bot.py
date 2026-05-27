@@ -5,7 +5,7 @@ import aiohttp
 import json
 
 # ============================================
-DISCORD_TOKEN = "MTUwOTA5MjY5NzQ2MDQ0MTA4OA.GzdlTE.hj5N8J9514JhMe_ivys-lb9LRHKGyFc2IHAG9A"
+DISCORD_TOKEN = "MTUwOTA5MjY5NzQ2MDQ0MTA4OA.G9_OnK.89ViAIppXNFWqQnuPojq5Y6XKHUNDWEsJsftlQ"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 CHAT_CHANNEL_NAME = "ai-chat"
 BOT_PERSONALITY = "You are a helpful, friendly assistant in a Discord server. Keep responses concise and conversational."
