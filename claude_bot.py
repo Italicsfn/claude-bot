@@ -1,8 +1,7 @@
 import os
 import discord
 from discord.ext import commands
-import aiohttp
-import json
+from groq import AsyncGroq
 
 # ============================================
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN", "")
@@ -18,59 +17,44 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # Store conversation history per user
 conversation_history = {}
 
+client = AsyncGroq(api_key=GROQ_API_KEY)
 
-async def ask_groq(user_id, message, image_url=None):
-    """Send message to Groq API and get response"""
 
+async def ask_groq(user_id, message):
     if user_id not in conversation_history:
         conversation_history[user_id] = []
 
-    # Add user message to history
     conversation_history[user_id].append({
         "role": "user",
         "content": message
     })
 
-    # Keep last 10 messages
     if len(conversation_history[user_id]) > 10:
         conversation_history[user_id] = conversation_history[user_id][-10:]
 
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    try:
+        response = await client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": BOT_PERSONALITY},
+                *conversation_history[user_id]
+            ],
+            max_tokens=1024,
+            temperature=0.9,
+        )
 
-    payload = {
-        "model": "llama3-8b-8192",
-        "messages": [
-            {"role": "system", "content": BOT_PERSONALITY},
-            *conversation_history[user_id]
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.9,
-    }
+        reply = response.choices[0].message.content
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload
-        ) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                reply = data["choices"][0]["message"]["content"]
+        conversation_history[user_id].append({
+            "role": "assistant",
+            "content": reply
+        })
 
-                # Add assistant response to history
-                conversation_history[user_id].append({
-                    "role": "assistant",
-                    "content": reply
-                })
+        return reply
 
-                return reply
-            else:
-                error = await resp.text()
-                print(f"Groq error: {error}")
-                return "⚠️ Something went wrong. Try again!"
+    except Exception as e:
+        print(f"Groq error: {e}")
+        return "⚠️ Something went wrong. Try again!"
 
 
 @bot.event
@@ -92,10 +76,7 @@ async def on_message(message):
         return
 
     async with message.channel.typing():
-        response = await ask_groq(
-            str(message.author.id),
-            message.content
-        )
+        response = await ask_groq(str(message.author.id), message.content)
 
         if len(response) > 2000:
             chunks = [response[i:i+2000] for i in range(0, len(response), 2000)]
@@ -107,7 +88,6 @@ async def on_message(message):
 
 @bot.command(name="reset")
 async def reset_chat(ctx):
-    """Reset conversation history"""
     if str(ctx.author.id) in conversation_history:
         del conversation_history[str(ctx.author.id)]
     await ctx.send("🔄 Conversation reset! Starting fresh.")
@@ -115,7 +95,6 @@ async def reset_chat(ctx):
 
 @bot.command(name="ask")
 async def ask_command(ctx, *, question):
-    """Ask Groq a question with !ask"""
     async with ctx.typing():
         response = await ask_groq(str(ctx.author.id), question)
         if len(response) > 2000:
